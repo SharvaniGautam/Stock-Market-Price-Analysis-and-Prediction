@@ -25,7 +25,36 @@ It's not just a project — it's a learning journey into:
 | **Matplotlib** | Visualization |
 | **yfinance** | Pulling live stock data |
 | **Scikit-learn / Keras** | ML model training & evaluation |
+| **Model Used** | Long Short Term Memory Netwrok (LSTM) |
 
+
+
+
+🧠 What’s LSTM? (**Hint** It comes from *RNN Family*)
+LSTM (Long Short-Term Memory) is a type of neural network specially designed for time series data — like stock prices, weather trends, or anything that changes over time.
+
+It remembers patterns from the past to make better guesses about the future.
+
+Each LSTM cell decides what to "remember", what to "forget", and what to "output". This helps it track patterns over long sequences.
+
+💡 Why Use LSTM for Stocks?
+Traditional models look at data like a spreadsheet.
+LSTM looks at data like a story unfolding over time.
+
+✅ Good at handling trends, momentum, and historical behavior and best for sequential data.
+
+🔄 LSTM in This Project
+If you add LSTM, your workflow will look like this:
+
+📥 Pull stock data with yfinance
+
+🧹 Normalize & reshape the data
+
+🧠 Feed it into an LSTM model (from Keras)
+
+📈 Get predictions for future prices
+
+🎨 Visualize predictions vs. real data
 ---
 
 ## 🚦 What You’ll Learn
