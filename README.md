@@ -85,6 +85,9 @@ jupyter notebook Stock_Market_Prediction_Model_Creation.ipynb
 
 4. Run it cell-by-cell. Watch the magic happen.
 
+![image](https://github.com/user-attachments/assets/8f51765a-b10f-4c86-9995-80e4a17d899b)
+
+
 
 
 ## 📌 Quick Tips
