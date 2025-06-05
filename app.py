@@ -1,80 +1,121 @@
 import numpy as np
 import pandas as pd
-import yfinance as yf
-from keras.models import load_model
-import streamlit as st
 import matplotlib.pyplot as plt
+import streamlit as st
+from keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
+from alpha_vantage.timeseries import TimeSeries
 
-model = load_model(r'C:\Python\Stock\Stock Predictions Model.keras')
+# Load LSTM model
+model = load_model(r"C:\Users\skgau\Downloads\Stock_Market_Prediction_ML\Stock Predictions Model.keras")
 
-st.header('Stock Market Predictor')
+st.set_page_config(layout="centered")
+st.title('📈 Stock Market Predictor')
 
-stock =st.text_input('Enter Stock Symnbol', 'GOOG')
+# --- User Input ---
+api_key = 'DT4HF7G0HHZ2ALGC'
+stock = st.text_input('Enter Stock Symbol', 'GOOG').upper().strip()
 start = '2012-01-01'
 end = '2022-12-31'
 
-data = yf.download(stock, start ,end)
+# --- Fetch Data from Alpha Vantage ---
+ts = TimeSeries(key=api_key, output_format='pandas')
+try:
+    data_raw, _ = ts.get_daily(symbol=stock, outputsize='full')
+except:
+    st.error("🚫 API Error: Check your internet connection or API key.")
+    st.stop()
 
-st.subheader('Stock Data')
-st.write(data)
+if data_raw.empty:
+    st.error(f"⚠️ No data returned for '{stock}'. Please check the symbol.")
+    st.stop()
 
-data_train = pd.DataFrame(data.Close[0: int(len(data)*0.80)])
-data_test = pd.DataFrame(data.Close[int(len(data)*0.80): len(data)])
+# --- Process & Slice Data ---
+data_raw.index = pd.to_datetime(data_raw.index)
+data_raw = data_raw.sort_index()
 
-from sklearn.preprocessing import MinMaxScaler
-scaler = MinMaxScaler(feature_range=(0,1))
+if pd.to_datetime(start) > data_raw.index.max():
+    st.error(f"⚠️ Date range exceeds available data. Latest: {data_raw.index.max().date()}")
+    st.stop()
 
-pas_100_days = data_train.tail(100)
-data_test = pd.concat([pas_100_days, data_test], ignore_index=True)
-data_test_scale = scaler.fit_transform(data_test)
+data = data_raw.loc[start:end]
+if data.empty:
+    st.error(f"⚠️ No data available between {start} and {end}.")
+    st.stop()
 
+data.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+
+st.subheader('📊 Raw Stock Data')
+st.dataframe(data.tail())
+
+# --- Moving Averages ---
+ma_50 = data['Close'].rolling(50).mean()
+ma_100 = data['Close'].rolling(100).mean()
+ma_200 = data['Close'].rolling(200).mean()
+
+# --- Plots ---
 st.subheader('Price vs MA50')
-ma_50_days = data.Close.rolling(50).mean()
-fig1 = plt.figure(figsize=(8,6))
-plt.plot(ma_50_days, 'r')
-plt.plot(data.Close, 'g')
-plt.show()
+fig1 = plt.figure(figsize=(8, 4))
+plt.plot(data['Close'], label='Close')
+plt.plot(ma_50, label='MA50', color='red')
+plt.legend()
 st.pyplot(fig1)
 
 st.subheader('Price vs MA50 vs MA100')
-ma_100_days = data.Close.rolling(100).mean()
-fig2 = plt.figure(figsize=(8,6))
-plt.plot(ma_50_days, 'r')
-plt.plot(ma_100_days, 'b')
-plt.plot(data.Close, 'g')
-plt.show()
+fig2 = plt.figure(figsize=(8, 4))
+plt.plot(data['Close'], label='Close')
+plt.plot(ma_50, label='MA50', color='red')
+plt.plot(ma_100, label='MA100', color='blue')
+plt.legend()
 st.pyplot(fig2)
 
 st.subheader('Price vs MA100 vs MA200')
-ma_200_days = data.Close.rolling(200).mean()
-fig3 = plt.figure(figsize=(8,6))
-plt.plot(ma_100_days, 'r')
-plt.plot(ma_200_days, 'b')
-plt.plot(data.Close, 'g')
-plt.show()
+fig3 = plt.figure(figsize=(8, 4))
+plt.plot(data['Close'], label='Close')
+plt.plot(ma_100, label='MA100', color='red')
+plt.plot(ma_200, label='MA200', color='blue')
+plt.legend()
 st.pyplot(fig3)
 
-x = []
-y = []
+# --- Train/Test Split ---
+data_close = data[['Close']]
+train_data = data_close[0:int(len(data_close) * 0.80)]
+test_data = data_close[int(len(data_close) * 0.80):]
 
-for i in range(100, data_test_scale.shape[0]):
-    x.append(data_test_scale[i-100:i])
-    y.append(data_test_scale[i,0])
+scaler = MinMaxScaler(feature_range=(0, 1))
+past_100 = train_data.tail(100)
+test_combined = pd.concat([past_100, test_data], ignore_index=True)
 
-x,y = np.array(x), np.array(y)
+if test_combined.shape[0] <= 100:
+    st.error("⚠️ Not enough data for prediction. Use a stock with more historical data.")
+    st.stop()
 
-predict = model.predict(x)
+test_scaled = scaler.fit_transform(test_combined)
 
-scale = 1/scaler.scale_
+# --- Create Test Sequences ---
+x_test = []
+y_test = []
+for i in range(100, test_scaled.shape[0]):
+    x_test.append(test_scaled[i-100:i])
+    y_test.append(test_scaled[i, 0])
 
-predict = predict * scale
-y = y * scale
+x_test = np.array(x_test)
+y_test = np.array(y_test)
 
-st.subheader('Original Price vs Predicted Price')
-fig4 = plt.figure(figsize=(8,6))
-plt.plot(predict, 'r', label='Original Price')
-plt.plot(y, 'g', label = 'Predicted Price')
+# --- Predict ---
+predictions = model.predict(x_test)
+
+# --- Reverse Scaling ---
+scale_factor = 1 / scaler.scale_[0]
+predictions = predictions * scale_factor
+y_test = y_test * scale_factor
+
+# --- Plot Prediction ---
+st.subheader('🔮 Original vs Predicted Price')
+fig4 = plt.figure(figsize=(8, 4))
+plt.plot(y_test, label='Actual Price', color='green')
+plt.plot(predictions, label='Predicted Price', color='red')
 plt.xlabel('Time')
 plt.ylabel('Price')
-plt.show()
+plt.legend()
 st.pyplot(fig4)
